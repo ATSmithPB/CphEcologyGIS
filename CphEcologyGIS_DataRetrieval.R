@@ -199,24 +199,26 @@ OS_LandUse <- sf::read_sf("DATA/1084_SHAPE_UTM32-EUREF89/FOT/NATUR/BRUGSGRAENSE.
 # Load Digital Surface Model (DSM)
 DSM_fileList <- list.files(path = "DATA/DSM_617_72_TIF_UTM32-ETRS89", full.names = TRUE) # List of .tiff file names
 DSM_length <- length(DSM_fileList) # Number of .tiff files in list
-DSM_rastVec <- vector(mode = "list", DSM_length) # Create empty list for [rast] objects
+DSM_rastList <- vector(mode = "list", DSM_length) # Create empty list for [rast] objects
 for (i in 1 : DSM_length) { # Populate list with new [rast] objects
   DSM_temp <- terra::rast(DSM_fileList[i])
-  DSM_rastVec[[i]] <- DSM_temp
+  DSM_rastList[[i]] <- DSM_temp
 }
 DSM_crs <- sf::st_crs(DSM_temp)
+DSM_merged <- terra::merge(DSM_rastList)
+
+#point.in.polygon()
 
 # Load Digital Terrain Model (DTM)
 DTM_fileList <- list.files(path = "DATA/DTM_617_72_TIF_UTM32-ETRS89", full.names = TRUE) # List of .tiff file names
 DTM_length <- length(DTM_fileList) # Number of .tiff files in list
-DTM_rastVec <- vector(mode = "list", DTM_length) # Create empty list for [rast] objects
+DTM_rastList <- vector(mode = "list", DTM_length) # Create empty list for [rast] objects
 for (i in 1 : DTM_length) { # Populate list with new [rast] objects
   DTM_temp <- terra::rast(DTM_fileList[i])
-  DTM_rastVec[[i]] <- DTM_temp
+  DTM_rastList[[i]] <- DTM_temp
 }
 DTM_crs <- sf::st_crs(DTM_temp)
 
-print(DTM_temp)
 
 # 5 - Crop Data
 BBox_poly_25832 <- sf::st_transform(BBox_poly, 25832) # Transform BBox to Lidar crs
