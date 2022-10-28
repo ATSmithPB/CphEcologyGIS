@@ -45,12 +45,20 @@ if ("sf" %in% rownames(installed.packages()) == FALSE)
   sf::sf_use_s2(FALSE)
 }
 
-if ("raster" %in% rownames(installed.packages()) == FALSE)
+if ("terra" %in% rownames(installed.packages()) == FALSE)
 {
-  install.packages("raster")
-  library(raster)
+  install.packages("terra")
+  library(terra)
 } else {
-  library(raster)
+  library(terra)
+}
+
+if ("Rcpp" %in% rownames(installed.packages()) == FALSE)
+{
+  install.packages("Rccp")
+  library(Rcpp)
+} else {
+  library(Rcpp)
 }
 
 if ("osmdata" %in% rownames(installed.packages()) == FALSE)
@@ -149,9 +157,10 @@ if ("nomisr" %in% rownames(installed.packages()) == FALSE)
   library(nomisr)
 }
 
+
 # 2 - Set working directory
-setwd("C://Users//ATSmi//OneDrive//Documents//CITA//7A//GIS") # Set working directory...
-getwd()
+setwd("C:/Users/ATSmi/OneDrive/Documents/CITA/7A/GIS") # Set working directory...
+
 
 # 3 - Setting bounding box area of analysis:
 # Central Copenhagen Analysis Bounding Box and Analysis Polygon
@@ -168,25 +177,14 @@ leaflet::leaflet() %>%
   leaflet::addTile %>%
   leaflet::addPolygons(data = BBox_poly) #ignore warning (default map is OSM)
 
+
 # 4a - Download data from O.S.M Overpass API (Comment out After Download)
 #OSM_query <- Analysis_BBox %>%
 #  osmdata::opq() # generate query for overpass API (Open Street Maps)
 #osmdata::osmdata_xml(OSM_query, filename = "osm_df.osm") # return query in in .osm format
 
-# 4b - Load data from .osm
-OSM_df <- osmdata::osmdata_sf(doc = "osm_df.osm", stringsAsFactors = FALSE) # Load data...
-
-# .osm data structure: https://wiki.openstreetmap.org/wiki/Map_features
-# '$' allows access to different levels of the data structure.
-# for a data-frame, it allows you to access different columns
-#   osm_pol <- OSM_df$osm_polygons
-#   osm_line <- OSM_df$osm_lines
-#   osm_points <- OSM_df$osm_points
-#   osm_mpoly <- OSM_df$osm_multipolygons
-#   osm_mline <- OSM_df$osm_multilines
-
-BBox_poly <- sf::`st_crs<-`(BBox_poly, 9001) # Assign CRS (Coordinate Reference System) to BBox...
-sf::st_crs(BBox_poly) # Copenhagen uses EPSG: 9001 - Mercator uses EPSG: 4326)
+# 4b - Load data from .osm (Comment out After Download)
+#OSM_df <- osmdata::osmdata_sf(doc = "osm_df.osm", stringsAsFactors = FALSE) # Load data...
 
 # 4c - Load Data From Other Shape Files
 OS_Buildings <- sf::read_sf("DATA/1084_SHAPE_UTM32-EUREF89/FOT/BYGNINGER/BYGNING.shp")
@@ -198,10 +196,35 @@ OS_Gardens <- sf::read_sf("DATA/1084_SHAPE_UTM32-EUREF89/FOT/NATUR/GARTNERI.shp"
 OS_LandUse <- sf::read_sf("DATA/1084_SHAPE_UTM32-EUREF89/FOT/NATUR/BRUGSGRAENSE.shp")
 
 # 4d - Load LIDAR data
-# Digital Surface Model (DSM)
-DSM <- raster::raster("Lidar_National_Program/National-LIDAR-Programme-DSM-2020-TQ38sw/P_12151/DSM_TQ3080_P_12151_20201212_20201212.tif") # loading raster file DIGITAL SURFACE MODEL (DSM)
-BBox_poly <- sf::`st_crs<-`(BBox_poly, 4326) # assigning crs to BBox (lat, lng coordinates can be understood as crs mercator, epsg: 4326)
-DSM <- raster::crop(DSM, raster::extent(sf::as_Spatial(sf::st_transform(sf::st_as_sf(BBox_poly), 27700)))) # cropping the raster with our bounding box, bear in mind that we are re-projecting the bbox to epsg:27700 crs and migrating the data from sf to sp system as the sp package is the base of the raster package
+# Load Digital Surface Model (DSM)
+DSM_fileList <- list.files(path = "DATA/DSM_617_72_TIF_UTM32-ETRS89", full.names = TRUE) # List of .tiff file names
+DSM_length <- length(DSM_fileList) # Number of .tiff files in list
+DSM_rastVec <- vector(mode = "list", DSM_length) # Create empty list for [rast] objects
+for (i in 1 : DSM_length) { # Populate list with new [rast] objects
+  DSM_temp <- terra::rast(DSM_fileList[i])
+  DSM_rastVec[[i]] <- DSM_temp
+}
+DSM_crs <- sf::st_crs(DSM_temp)
+
+# Load Digital Terrain Model (DTM)
+DTM_fileList <- list.files(path = "DATA/DTM_617_72_TIF_UTM32-ETRS89", full.names = TRUE) # List of .tiff file names
+DTM_length <- length(DTM_fileList) # Number of .tiff files in list
+DTM_rastVec <- vector(mode = "list", DTM_length) # Create empty list for [rast] objects
+for (i in 1 : DTM_length) { # Populate list with new [rast] objects
+  DTM_temp <- terra::rast(DTM_fileList[i])
+  DTM_rastVec[[i]] <- DTM_temp
+}
+DTM_crs <- sf::st_crs(DTM_temp)
+
+print(DTM_temp)
+
+# 5 - Crop Data
+BBox_poly_25832 <- sf::st_transform(BBox_poly, 25832) # Transform BBox to Lidar crs
+BBox_poly_9001 <- sf::st_transform(BBox_poly, 9001) # Transform BBox to DSM crs
+
+# DSM <- raster::crop(DSM, raster::extent(sf::as_Spatial(sf::st_transform(sf::st_as_sf(BBox_poly), 27700)))) # cropping the raster with our bounding box, bear in mind that we are re-projecting the bbox to epsg:27700 crs and migrating the data from sf to sp system as the sp package is the base of the raster package
+DSM_Crop <- terra::crop
+
 
 # Digital Terrain Model (DTM)
 DTM <- raster::raster("Lidar_National_Program/National-LIDAR-Programme-DTM-2020-TQ38sw/P_12151/DTM_TQ3080_P_12151_20201212_20201212.tif") # loading raster file DIGITAL TERRAIN MODEL (DTM)
@@ -219,6 +242,10 @@ DTM <- raster::crop(DTM, raster::extent(sf::as_Spatial(sf::st_transform(sf::st_a
 #hill_DTM <- raster::hillShade(slope_DTM, aspect_DTM, 40, 270) # hill shade
 #raster::plot(hill_DTM, col = grey(0:100/100), legend = FALSE, main = 'Analysis Area') # plot 3
 #raster::plot(DTM, col = rainbow(25, alpha = 0.35), add = TRUE) # plot 4
+
+
+BBox_poly <- sf::`st_crs<-`(BBox_poly, 9001) # Assign CRS (Coordinate Reference System) to BBox...
+sf::st_crs(BBox_poly) # Copenhagen uses EPSG: 9001 - Mercator uses EPSG: 4326)
 
 
 #6 - Saving the Data
