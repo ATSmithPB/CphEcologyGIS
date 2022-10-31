@@ -1,4 +1,4 @@
 # CphEcologyGIS
 This project is in devleopment...
 
-R Source Code for managing GIS Datasets for Copenhagen
+R and Python Source Code for managing GIS Datasets focusing on Copenhagen
