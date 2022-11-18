@@ -6,6 +6,7 @@ from logging import lastResort
 import os as o
 from pyexpat.errors import XML_ERROR_INCOMPLETE_PE
 import geopandas as gpd
+from matplotlib.hatch import NorthEastHatch
 import pandas as pd
 import numpy as np
 import pathlib as pl
@@ -15,10 +16,12 @@ import overpy
 import requests as rq
 import ee
 import datetime
+import geemap
 
 # Trigger the authentication flow and initialize the library.
-# ee.Authenticate() run once a week?
+#ee.Authenticate() #run once a week?
 ee.Initialize()
+print('EE Initialized...')
 
 # 2 - Define Functions:
 def bbox_from_geopts(pt_a, pt_b):
@@ -41,42 +44,107 @@ def bbox_from_geopts(pt_a, pt_b):
 o.chdir("C:/Users/ATSmi/OneDrive/Documents/CITA/7A/GIS")
 o.getcwd()
 
-# 4 - Define Retrieval BoundingBox:
+# 4 - Define Data Retrieval BoundingBox:
 a_geopt: tuple = (55.666103, 12.549321)
 b_geopt: tuple = (55.698544, 12.630742)
 bbox_polygon: sg.Polygon = bbox_from_geopts(a_geopt, b_geopt)
 bbox_df: pd.DataFrame = {'geometry': [bbox_polygon]}
 bbox_gdf: gpd.GeoDataFrame = gpd.GeoDataFrame(bbox_df, crs="EPSG:4326")
 bbox_bnd: pd.DataFrame = bbox_gdf.bounds
+north: float = bbox_bnd.iat[0,2]
+south: float = bbox_bnd.iat[0,0]
+east: float = bbox_bnd.iat[0,3]
+west: float = bbox_bnd.iat[0,1]
+print('BBox Initialized...')
 
 # 5 - Get OSM. Query Open Street Maps (OSM) via Overpass API:
-headers = {
-    'Connection': 'keep-alive',
-    'sec-ch-ua': '"Google Chrome 80"',
-    'Accept': '*/*',
-    'Sec-Fetch-Dest': 'empty',
-    'User-Agent': 'EcologyGIS_DataRetrievl / atsmithpb @ github',
-    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-    'Origin': 'https://overpass-turbo.eu',
-    'Sec-Fetch-Site': 'cross-site',
-    'Sec-Fetch-Mode': 'cors',
-    'Referer': 'https://overpass-turbo.eu/',
-    'Accept-Language': '',
-    'dnt': '1',
-}
-query = """nwr(55.666103,12.549321,55.695884,12.630742);out;"""
-data = {'data': query}
-response = rq.post('https://overpass-api.de/api/interpreter', headers=headers, data=data)
-print(response)
-with open('myquery.osm', 'w', encoding ='utf-8') as f:
-    f.write(response.text)
+# headers = {
+#     'Connection': 'keep-alive',
+#     'sec-ch-ua': '"Google Chrome 80"',
+#     'Accept': '*/*',
+#     'Sec-Fetch-Dest': 'empty',
+#     'User-Agent': 'EcologyGIS_DataRetrievl / atsmithpb @ github',
+#     'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+#     'Origin': 'https://overpass-turbo.eu',
+#     'Sec-Fetch-Site': 'cross-site',
+#     'Sec-Fetch-Mode': 'cors',
+#     'Referer': 'https://overpass-turbo.eu/',
+#     'Accept-Language': '',
+#     'dnt': '1',
+# }
+# query = f"""nwr({south},{west},{north},{east});out;"""
+# data = {'data': query}
+# print('Sending Query to Overpass...')
+# response = rq.post('https://overpass-api.de/api/interpreter', headers=headers, data=data)
+# print(f'Response: {response}')
+# with open('myquery.osm', 'w', encoding ='utf-8') as f:
+#     f.write(response.text)
 
+# 6 - Get Google EE Data in BoundingBox
+ee_date_start: ee.Date = ee.Date('2022-11-01')
+ee_date_end: ee.Date = ee.Date('2022-11-16')
+ee_bbox: ee.Geometry = ee.Geometry.BBox(west, south, east, north)
+ee_bbox_poly: ee.Geometry = ee.Geometry.Polygon(ee_bbox._coordinates)
+ee_bbox_rect: ee.Geometry = ee.Geometry.Rectangle(south, west, north, east)
 
-# 6 - Get Google EE Data
-ee_date = ee.Date('2022-10-12')
-py_date = datetime.datetime.utcfromtimestamp(ee_date.getInfo()['value']/1000.0)
-ee.Geometry.BBox(bbox_bnd.iat[0,0])
+ee_filter_dw: ee.Filter = ee.Filter.And(ee.Filter.bounds(ee_bbox),ee.Filter.date(ee_date_start, ee_date_end))
+ee_filter_s2 = ee.Filter.And(ee.Filter.bounds(ee_bbox),ee.Filter.date(ee_date_start, ee_date_end), ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 35))
 
+ee_ic_dw = ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1').filter(ee_filter_dw)\
+    .select('label')
+ee_ic_s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED').filter(ee_filter_s2)\
+    .select('B4', 'B3', 'B2')
+ee_i_dw: ee.Image = ee.Image(ee_ic_dw.first())
+ee_i_s2: ee.Image = ee.Image(ee_ic_s2.first())
+print('EE Data Recieved...')
+
+# Join corresponding DW and S2 images (by system:index).
+#Dwee_ic_s2 = ee.Join.saveFirst('s2_img').apply(ee_ic_dw, ee_ic_s2, ee.Filter.equals({"leftField": 'system:index', "rightField": 'system:index'}))
+#print('EE Data Joined...')
+
+# Define list pairs of DW LULC label and color.
+CLASS_NAMES: list = [
+    'water', 'trees', 'grass', 'flooded_vegetation', 'crops',
+    'shrub_and_scrub', 'built', 'bare', 'snow_and_ice']
+
+VIS_PALETTE: list = [
+    '419BDF', '397D49', '88B053', '7A87C6',
+    'E49635', 'DFC35A', 'C4281B', 'A59B8F',
+    'B39FE1']
+
+# Create an RGB image of the label (most likely class) on [0, 1].
+ee_i_dwviz = ee_i_dw.visualize(**{'bands': 'label','min': 0, 'max': 8, 'palette': VIS_PALETTE})
+ee_i_s2viz = ee_i_s2.visualize(**{'bands': ['B4', 'B3', 'B2'],'min': 0, 'max': 4000})
+
+#Get the most likely class probability.
+# top1Prob = ee_i_dw.select(CLASS_NAMES).reduce(ee.Reducer.max())
+
+#Create a hillshade of the most likely class probability on [0, 1];
+#top1ProbHillshade = ee.Terrain.hillshade(top1Prob.multiply(100)).divide(255)
+
+#Combine the RGB image with the hillshade.
+#dwRgbHillshade = dwRgb.multiply(top1ProbHillshade)
+
+print('EE Data Ready...')
+ee_task_dw = ee.batch.Export.image.toDrive(image = ee_i_dwviz,  # an ee.Image object.
+                                     region = ee_bbox_poly,  # an ee.Geometry object.
+                                     description = 'EarthEngine_DyanmicWorld_CRS25832',
+                                     folder = 'Data',
+                                     fileNamePrefix = 'EE_DW_25832',
+                                     scale = 10,
+                                     crs = 'EPSG:25832')
+
+ee_task_s2 = ee.batch.Export.image.toDrive(image = ee_i_s2viz,  # an ee.Image object.
+                                     region = ee_bbox_poly,  # an ee.Geometry object.
+                                     description = 'EarthEngine_Sentinal2_SurfaceReflect_CRS25832',
+                                     folder = 'Data',
+                                     fileNamePrefix = 'EE_S2SR_25832',
+                                     scale = 10,
+                                     crs = 'EPSG:25832')
+
+ee_task_dw.start()
+ee_task_s2.start()
+print('Images Exported Successfully...')
 
 #api = overpy.Overpass()
 #results = api.parse_xml(response.text)
@@ -98,5 +166,16 @@ ee.Geometry.BBox(bbox_bnd.iat[0,0])
 
 
 
-
+#    test
+# Landsat8 = ee.Image('LANDSAT/LC08/C01/T1_TOA/LC08_170052_20170108')\
+#     .select('B4', 'B3', 'B2')
+# region = ee.Geometry.Rectangle(37.07, 11.50, 37.39, 11.82)
+# task = ee.batch.Export.image.toDrive(**{
+#     'image': Landsat8,
+#     'description' : 'imageToDrive',
+#     'folder': 'Example_Folder',
+#     'scale': 30,
+#     'region': region.getInfo()['coordinates']
+# })
+# task.start()
 
