@@ -17,6 +17,7 @@ import requests as rq
 import ee
 import datetime
 import geemap
+import pygbif as gb
 
 # Trigger the authentication flow and initialize the library.
 #ee.Authenticate() #run once a week?
@@ -39,6 +40,17 @@ def bbox_from_geopts(pt_a, pt_b):
         ymax = pt_a[1]
     bb_poly = sg.Polygon([(xmin, ymin), (xmax, ymin), (xmax, ymax), (xmin, ymax)])
     return bb_poly
+
+def getEVI(ee_image):
+    EVI = ee_image.expression(
+        '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))', {
+            'NIR': ee_image.select('B8').divide(10000),
+            'RED': ee_image.select('B4').divide(10000),
+            'BLUE': ee_image.select('B2').divide(10000)
+        }
+    ).rename("EVI")
+    ee_image = ee_image.addBands(EVI)
+    return(ee_image)
 
 # 3 - Set Working Directory:
 o.chdir("C:/Users/ATSmi/OneDrive/Documents/CITA/7A/GIS")
@@ -80,41 +92,40 @@ print('BBox Initialized...')
 # with open('myquery.osm', 'w', encoding ='utf-8') as f:
 #     f.write(response.text)
 
-# 6 - Get Google EE Data in BoundingBox
+# 6 - Retrieve Google EE Data within the BoundingBox as ee.Image objects
 ee_date_start: ee.Date = ee.Date('2022-11-01')
 ee_date_end: ee.Date = ee.Date('2022-11-16')
 ee_bbox: ee.Geometry = ee.Geometry.BBox(west, south, east, north)
 ee_bbox_poly: ee.Geometry = ee.Geometry.Polygon(ee_bbox._coordinates)
 ee_bbox_rect: ee.Geometry = ee.Geometry.Rectangle(south, west, north, east)
-
 ee_filter_dw: ee.Filter = ee.Filter.And(ee.Filter.bounds(ee_bbox),ee.Filter.date(ee_date_start, ee_date_end))
 ee_filter_s2 = ee.Filter.And(ee.Filter.bounds(ee_bbox),ee.Filter.date(ee_date_start, ee_date_end), ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 35))
-
 ee_ic_dw = ee.ImageCollection('GOOGLE/DYNAMICWORLD/V1').filter(ee_filter_dw)\
     .select('label')
 ee_ic_s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED').filter(ee_filter_s2)\
-    .select('B4', 'B3', 'B2')
+    .select('B4', 'B3', 'B2', 'B8')
 ee_i_dw: ee.Image = ee.Image(ee_ic_dw.first())
 ee_i_s2: ee.Image = ee.Image(ee_ic_s2.first())
 print('EE Data Recieved...')
 
-# Join corresponding DW and S2 images (by system:index).
-#Dwee_ic_s2 = ee.Join.saveFirst('s2_img').apply(ee_ic_dw, ee_ic_s2, ee.Filter.equals({"leftField": 'system:index', "rightField": 'system:index'}))
-#print('EE Data Joined...')
+# Calculate NDVI from S2 Red and NIR bands
+ee_i_ndvi = ee_i_s2.normalizedDifference(['B8', 'B4'])
 
-# Define list pairs of DW LULC label and color.
-CLASS_NAMES: list = [
-    'water', 'trees', 'grass', 'flooded_vegetation', 'crops',
-    'shrub_and_scrub', 'built', 'bare', 'snow_and_ice']
-
-VIS_PALETTE: list = [
+# Define color palettes
+ee_palette_dw: list = [
     '419BDF', '397D49', '88B053', '7A87C6',
     'E49635', 'DFC35A', 'C4281B', 'A59B8F',
     'B39FE1']
 
-# Create an RGB image of the label (most likely class) on [0, 1].
-ee_i_dwviz = ee_i_dw.visualize(**{'bands': 'label','min': 0, 'max': 8, 'palette': VIS_PALETTE})
+# Define color palettes
+ee_palette_ndvi: list = [
+    '#d73027', '#f46d43', '#fdae61', '#fee08b',
+    '#d9ef8b', '#a6d96a', '#66bd63', '#1a9850']
+
+# Create RGB images based on visualization parameters
+ee_i_dwviz = ee_i_dw.visualize(**{'bands': 'label','min': 0, 'max': 8, 'palette': ee_palette_dw})
 ee_i_s2viz = ee_i_s2.visualize(**{'bands': ['B4', 'B3', 'B2'],'min': 0, 'max': 4000})
+ee_i_ndviviz = ee_i_ndvi.visualize(**{'min': -1, 'max': 1, 'palette': ee_palette_ndvi})
 
 #Get the most likely class probability.
 # top1Prob = ee_i_dw.select(CLASS_NAMES).reduce(ee.Reducer.max())
@@ -142,6 +153,15 @@ ee_task_s2 = ee.batch.Export.image.toDrive(image = ee_i_s2viz,  # an ee.Image ob
                                      scale = 10,
                                      crs = 'EPSG:25832')
 
+ee_task_ndvi = ee.batch.Export.image.toDrive(image = ee_i_ndviviz,  # an ee.Image object.
+                                     region = ee_bbox_poly,  # an ee.Geometry object.
+                                     description = 'EarthEngine_Normalized-Difference-Vegitation-Index_CRS25832',
+                                     folder = 'Data',
+                                     fileNamePrefix = 'EE_NDVI_25832',
+                                     scale = 10,
+                                     crs = 'EPSG:25832')
+
+ee_task_ndvi.start()
 ee_task_dw.start()
 ee_task_s2.start()
 print('Images Exported Successfully...')
