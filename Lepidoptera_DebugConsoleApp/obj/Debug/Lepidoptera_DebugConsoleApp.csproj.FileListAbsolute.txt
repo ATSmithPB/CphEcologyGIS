@@ -1,0 +1,16 @@
+C:\Users\ATSmi\source\repos\Lepidoptera_DebugConsoleApp\bin\Debug\Lepidoptera_DebugConsoleApp.exe.config
+C:\Users\ATSmi\source\repos\Lepidoptera_DebugConsoleApp\bin\Debug\Lepidoptera_DebugConsoleApp.exe
+C:\Users\ATSmi\source\repos\Lepidoptera_DebugConsoleApp\bin\Debug\Lepidoptera_DebugConsoleApp.pdb
+C:\Users\ATSmi\source\repos\Lepidoptera_DebugConsoleApp\bin\Debug\GeoJSON.Net.dll
+C:\Users\ATSmi\source\repos\Lepidoptera_DebugConsoleApp\bin\Debug\Lepidoptera.dll
+C:\Users\ATSmi\source\repos\Lepidoptera_DebugConsoleApp\bin\Debug\Newtonsoft.Json.dll
+C:\Users\ATSmi\source\repos\Lepidoptera_DebugConsoleApp\bin\Debug\Lepidoptera.pdb
+C:\Users\ATSmi\source\repos\Lepidoptera_DebugConsoleApp\bin\Debug\Lepidoptera.dll.config
+C:\Users\ATSmi\source\repos\Lepidoptera_DebugConsoleApp\bin\Debug\Newtonsoft.Json.xml
+C:\Users\ATSmi\source\repos\Lepidoptera_DebugConsoleApp\obj\Debug\Lepidoptera_DebugConsoleApp.csproj.AssemblyReference.cache
+C:\Users\ATSmi\source\repos\Lepidoptera_DebugConsoleApp\obj\Debug\Lepidoptera_DebugConsoleApp.csproj.SuggestedBindingRedirects.cache
+C:\Users\ATSmi\source\repos\Lepidoptera_DebugConsoleApp\obj\Debug\Lepidoptera_DebugConsoleApp.exe.config
+C:\Users\ATSmi\source\repos\Lepidoptera_DebugConsoleApp\obj\Debug\Lepidoptera_DebugConsoleApp.csproj.CoreCompileInputs.cache
+C:\Users\ATSmi\source\repos\Lepidoptera_DebugConsoleApp\obj\Debug\Lepidoptera_DebugConsoleApp.csproj.CopyComplete
+C:\Users\ATSmi\source\repos\Lepidoptera_DebugConsoleApp\obj\Debug\Lepidoptera_DebugConsoleApp.exe
+C:\Users\ATSmi\source\repos\Lepidoptera_DebugConsoleApp\obj\Debug\Lepidoptera_DebugConsoleApp.pdb
